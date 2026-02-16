@@ -1,0 +1,21 @@
+{
+  "caldav": {
+    "url": "https://dav.zeip.eu",
+    "username": "",
+    "password": "",
+    "calendars": []
+  },
+  "tracks": {
+    "url": "https://app.taskitin.fi",
+    "username": "",
+    "password": ""
+  },
+  "remarkable": {
+    "folder": "Daily Planner"
+  },
+  "planner": {
+    "day_start_hour": 7,
+    "day_end_hour": 21,
+    "timezone": "Europe/Helsinki"
+  }
+}

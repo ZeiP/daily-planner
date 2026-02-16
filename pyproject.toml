@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "daily-planner"
+version = "0.1.0"
+description = "Generate a daily planner PDF from CalDAV and Tracks GTD, upload to reMarkable"
+requires-python = ">=3.10"
+dependencies = [
+    "caldav>=1.3",
+    "requests>=2.31",
+    "reportlab>=4.0",
+    "python-dateutil>=2.8",
+    "icalendar>=5.0",
+]
+
+[project.scripts]
+daily-planner = "planner.main:main"
+
+[tool.setuptools.packages.find]
+include = ["planner*"]

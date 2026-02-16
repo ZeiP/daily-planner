@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: planner
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: planner-report
+  namespace: planner
+spec:
+  schedule: "0 3 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: planner
+            image: planner:latest
+            imagePullPolicy: IfNotPresent
+            env:
+            # CalDAV Configuration
+            - name: PLANNER_CALDAV_URL
+              valueFrom:
+                secretKeyRef:
+                  name: caldav-secrets
+                  key: url
+            - name: PLANNER_CALDAV_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: caldav-secrets
+                  key: username
+            - name: PLANNER_CALDAV_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: caldav-secrets
+                  key: password
+            
+            # Tracks Configuration
+            - name: PLANNER_TRACKS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: tracks-secrets
+                  key: url
+            - name: PLANNER_TRACKS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: tracks-secrets
+                  key: username
+            - name: PLANNER_TRACKS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tracks-secrets
+                  key: password
+
+            # reMarkable Configuration
+            - name: RMAPI_CONFIG_CONTENT
+              valueFrom:
+                secretKeyRef:
+                  name: remarkable-secrets
+                  key: rmapi_config_content
+            
+            # Optional General Config (can be set directly or via ConfigMap if needed)
+            - name: PLANNER_TIMEZONE
+              value: "Europe/Helsinki"
+            
+            resources:
+              requests:
+                memory: "128Mi"
+                cpu: "100m"
+              limits:
+                memory: "256Mi"
+                cpu: "500m"
+          
+          restartPolicy: OnFailure
