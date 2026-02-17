@@ -36,6 +36,12 @@ spec:
                 secretKeyRef:
                   name: caldav-secrets
                   key: password
+            - name: PLANNER_CALDAV_CALENDARS
+              valueFrom:
+                secretKeyRef:
+                  name: caldav-secrets
+                  key: calendars
+                  optional: true
             
             # Tracks Configuration
             - name: PLANNER_TRACKS_URL
