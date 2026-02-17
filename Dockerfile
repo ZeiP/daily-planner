@@ -10,9 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install rmapi (ddvk fork)
-# Using v0.0.29 as identified in research
-ARG RMAPI_VERSION=v0.0.29
-RUN curl -L "https://github.com/ddvk/rmapi/releases/download/${RMAPI_VERSION}/rmapi-linuxx86-64.tar.gz" -o rmapi.tar.gz \
+ARG RMAPI_VERSION=v0.0.32
+RUN curl -L "https://github.com/ddvk/rmapi/releases/download/${RMAPI_VERSION}/rmapi-linux-amd64.tar.gz" -o rmapi.tar.gz \
     && tar -xzf rmapi.tar.gz \
     && mv rmapi /usr/local/bin/rmapi \
     && chmod +x /usr/local/bin/rmapi \
