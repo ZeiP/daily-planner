@@ -58,9 +58,13 @@ def load_config(path: Optional[str] = None) -> Config:
             config_path = Path(__file__).parent.parent / "config.json"
 
     if not config_path.exists():
-        print(f"Error: Config file not found at {config_path}", file=sys.stderr)
-        print("Copy config.example.json to config.json and fill in your credentials.", file=sys.stderr)
-        sys.exit(1)
+        # Only error if user explicitly provided a path that doesn't exist
+        # Otherwise, we might be relying solely on env vars
+        if path:
+            print(f"Error: Config file not found at {config_path}", file=sys.stderr)
+            sys.exit(1)
+        # Else just warn/debug log? For now, silent proceed is okay, as later validation will catch missing keys.
+        pass
 
     # Load from file if it exists
     file_config = {}
