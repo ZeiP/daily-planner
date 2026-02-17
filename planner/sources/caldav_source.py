@@ -29,18 +29,57 @@ class CalDavSource(DataSource):
             username=self.config.username,
             password=self.config.password,
         )
-        principal = client.principal()
-        calendars = principal.calendars()
 
-        logger.info("Found %d calendars", len(calendars))
+        calendars_to_check = []
+        
+        # 1. Handle explicit URLs in configuration
+        explicit_urls = [c for c in self.config.calendars if c.startswith("http")]
+        filter_names = [c for c in self.config.calendars if not c.startswith("http")]
 
-        for cal in calendars:
-            cal_name = cal.name or "Unknown"
+        for url in explicit_urls:
+            try:
+                cal = client.calendar(url=url)
+                logger.debug("Added explicit calendar URL: %s", url)
+                calendars_to_check.append(cal)
+            except Exception as e:
+                logger.error("Failed to add calendar by URL %s: %s", url, e)
 
-            # If specific calendars configured, skip others
-            if self.config.calendars and cal_name not in self.config.calendars:
-                logger.debug("Skipping calendar: %s", cal_name)
-                continue
+        # 2. Discover calendars if needed
+        # If no specific calendars configured (empty list), OR if we have name filters
+        should_discover = (not self.config.calendars) or (len(filter_names) > 0)
+
+        if should_discover:
+            try:
+                principal = client.principal()
+                discovered = principal.calendars()
+                logger.info("Discovered %d calendars via principal", len(discovered))
+
+                for cal in discovered:
+                    cal_name = cal.name or "Unknown"
+                    
+                    # If specific name filters exist, check them
+                    if filter_names and cal_name not in filter_names:
+                        logger.debug("Skipping calendar: %s", cal_name)
+                        continue
+                    
+                    calendars_to_check.append(cal)
+            except Exception as e:
+                logger.error("Failed to discover calendars: %s", e)
+                # If we have explicit URLs, we might still proceed, so don't return yet?
+                # But if discovery was the only thing, we are done.
+
+        if not calendars_to_check:
+            logger.warning("No calendars found to process.")
+            return
+
+        logger.info("Processing %d calendars", len(calendars_to_check))
+
+        for cal in calendars_to_check:
+            # specialized name handling
+            try:
+                cal_name = cal.name or str(cal.url)
+            except:
+                cal_name = "Unknown"
 
             logger.info("Fetching events from calendar: %s", cal_name)
             self._fetch_calendar_events(cal, cal_name, target_date, data)
