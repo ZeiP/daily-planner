@@ -38,15 +38,20 @@ class TracksSource(DataSource):
         todos = self._fetch_todos(contexts, projects)
 
         # Only show todos that have a deadline and are due today or overdue
-        with_due = [t for t in todos if t.due_date]
+        relevant_todos = [
+            t for t in todos 
+            if t.due_date and t.due_date <= target_date
+        ]
+        relevant_todos.sort(key=lambda t: t.due_date, reverse=True)
+
         logger.debug(
-            "Todos: %d total, %d with due_date. target_date=%s. Due dates: %s",
-            len(todos), len(with_due), target_date,
-            [(t.description[:30], str(t.due_date)) for t in with_due[:10]]
+            "Todos: %d total, %d active today. target_date=%s. Due dates (desc): %s",
+            len(todos), len(relevant_todos), target_date,
+            [(t.description[:30], str(t.due_date)) for t in relevant_todos[:10]]
         )
-        for todo in todos:
-            if todo.due_date and todo.due_date <= target_date:
-                data.todos.append(todo)
+
+        data.todos.extend(relevant_todos)
+
 
         logger.info("Added %d/%d todos from Tracks (filtered by deadline <= %s)", len(data.todos), len(todos), target_date)
 
@@ -93,7 +98,7 @@ class TracksSource(DataSource):
     def _fetch_todos(self, contexts: dict[int, str], projects: dict[int, str]) -> list[TodoItem]:
         """Fetch active (not completed) todos."""
         try:
-            resp = self.session.get(f"{self.base_url}/todos.xml", timeout=30)
+            resp = self.session.get(f"{self.base_url}/todos.xml?limit_to_active_todos=1", timeout=30)
             resp.raise_for_status()
         except requests.RequestException as e:
             logger.error("Failed to fetch todos: %s", e)
@@ -103,11 +108,6 @@ class TracksSource(DataSource):
         root = ElementTree.fromstring(resp.content)
 
         for todo_el in root.findall(".//todo"):
-            # Skip completed todos
-            state = todo_el.findtext("state", "")
-            if state == "completed":
-                continue
-
             description = todo_el.findtext("description", "").strip()
             if not description:
                 continue
