@@ -87,7 +87,7 @@ FONT_SIZE_FOOTER = 6
 class PlannerPDFGenerator:
     """Generates a daily planner PDF from PlannerData."""
 
-    def __init__(self, day_start_hour: int = 7, day_end_hour: int = 21):
+    def __init__(self, day_start_hour: int = 8, day_end_hour: int = 21):
         self.day_start_hour = day_start_hour
         self.day_end_hour = day_end_hour
         self._calendar_color_map: dict[str, int] = {}
