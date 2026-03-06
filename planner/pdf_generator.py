@@ -225,7 +225,7 @@ class PlannerPDFGenerator:
         # Time slots
         num_hours = self.day_end_hour - self.day_start_hour
         available_height = y - bottom_limit
-        slot_height = min(available_height / num_hours, 12 * mm)
+        slot_height = available_height / num_hours
 
         for hour_idx in range(num_hours):
             hour = self.day_start_hour + hour_idx
@@ -243,11 +243,27 @@ class PlannerPDFGenerator:
             c.setLineWidth(0.3)
             c.line(line_x, slot_y, MARGIN_LEFT + SCHEDULE_WIDTH, slot_y)
 
-        # Draw events on slots
+        # Group events by start time; within each group sort longest-first
+        from collections import defaultdict
+        groups: dict = defaultdict(list)
         for event in timed_events:
             if event.start_time is None:
                 continue
-            self._draw_timed_event(c, event, y, slot_height)
+            groups[event.start_time].append(event)
+
+        def _duration_hours(ev) -> float:
+            if ev.end_time is None:
+                return 1.0
+            sh = ev.start_time.hour + ev.start_time.minute / 60.0
+            eh = ev.end_time.hour + ev.end_time.minute / 60.0
+            return max(eh - sh, 0.0)
+
+        for start_time, group in groups.items():
+            group.sort(key=_duration_hours, reverse=True)  # longest first (left)
+            n = len(group)
+            for col_idx, event in enumerate(group):
+                self._draw_timed_event(c, event, y, slot_height, col_idx=col_idx, num_cols=n)
+
 
         return y - (num_hours * slot_height)
 
@@ -276,9 +292,15 @@ class PlannerPDFGenerator:
         return y
 
     def _draw_timed_event(
-        self, c: canvas.Canvas, event: CalendarEvent, schedule_top_y: float, slot_height: float
+        self, c: canvas.Canvas, event: CalendarEvent, schedule_top_y: float, slot_height: float,
+        col_idx: int = 0, num_cols: int = 1,
     ) -> None:
-        """Draw a single timed event on the schedule."""
+        """Draw a single timed event on the schedule.
+
+        When multiple events share the same start time they are passed as a
+        group (num_cols > 1).  Each event occupies an equal-width sub-column
+        within the event area, ordered longest-first from the left.
+        """
         if event.start_time is None:
             return
 
@@ -293,9 +315,15 @@ class PlannerPDFGenerator:
         if start_hour >= end_hour:
             return
 
-        # Calculate positions
-        event_x = MARGIN_LEFT + 12 * mm + 1 * mm
-        event_width = SCHEDULE_WIDTH - 12 * mm - 2 * mm
+        # Total available event area
+        total_event_width = SCHEDULE_WIDTH - 12 * mm - 2 * mm
+        col_gap = 1 * mm if num_cols > 1 else 0
+        col_width = (total_event_width - col_gap * (num_cols - 1)) / num_cols
+
+        base_event_x = MARGIN_LEFT + 12 * mm + 1 * mm
+        event_x = base_event_x + col_idx * (col_width + col_gap)
+        event_width = col_width
+
         top = schedule_top_y - (start_hour - self.day_start_hour) * slot_height
         bottom = schedule_top_y - (end_hour - self.day_start_hour) * slot_height
         event_height = top - bottom
@@ -315,6 +343,11 @@ class PlannerPDFGenerator:
         text_x = event_x + 3 * mm
         text_y = top - 3 * mm
 
+        # Estimate how many chars fit in this column
+        approx_char_width = FONT_SIZE_EVENT * 0.52  # points per character
+        text_area_pts = event_width - 3 * mm - 1 * mm  # subtract left padding + right margin
+        max_title_chars = max(int(text_area_pts / approx_char_width), 6)
+
         # Time range
         c.setFont("Helvetica", FONT_SIZE_EVENT - 1)
         time_str = event.start_time.strftime("%H:%M")
@@ -324,13 +357,14 @@ class PlannerPDFGenerator:
 
         # Title
         c.setFont("Helvetica-Bold", FONT_SIZE_EVENT)
-        c.drawString(text_x, text_y - 3.2 * mm, event.title[:40])
+        c.drawString(text_x, text_y - 3.2 * mm, event.title[:max_title_chars])
 
         # Location (if room)
         if event.location and event_height > 12 * mm:
             c.setFont("Helvetica", FONT_SIZE_EVENT - 1)
             c.setFillColor(COLOR_TODO_CONTEXT)
-            c.drawString(text_x, text_y - 6.5 * mm, f"📍 {event.location[:35]}")
+            max_loc_chars = max(int(text_area_pts / (FONT_SIZE_EVENT * 0.45)), 6)
+            c.drawString(text_x, text_y - 6.5 * mm, f"📍 {event.location[:max_loc_chars]}")
 
     # ── Todos (Right Column) ──────────────────────────────────────────────────
 
