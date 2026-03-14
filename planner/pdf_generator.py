@@ -243,26 +243,52 @@ class PlannerPDFGenerator:
             c.setLineWidth(0.3)
             c.line(line_x, slot_y, MARGIN_LEFT + SCHEDULE_WIDTH, slot_y)
 
-        # Group events by start time; within each group sort longest-first
-        from collections import defaultdict
-        groups: dict = defaultdict(list)
-        for event in timed_events:
-            if event.start_time is None:
-                continue
-            groups[event.start_time].append(event)
+        # Assign columns to overlapping events so they sit side-by-side
+        # instead of drawing on top of each other.
+        valid_events = [e for e in timed_events if e.start_time is not None]
 
-        def _duration_hours(ev) -> float:
-            if ev.end_time is None:
-                return 1.0
+        def _event_interval(ev):
             sh = ev.start_time.hour + ev.start_time.minute / 60.0
-            eh = ev.end_time.hour + ev.end_time.minute / 60.0
-            return max(eh - sh, 0.0)
+            eh = sh + 1.0  # default 1 hour
+            if ev.end_time:
+                eh = ev.end_time.hour + ev.end_time.minute / 60.0
+            return (max(sh, self.day_start_hour), min(eh, self.day_end_hour))
 
-        for start_time, group in groups.items():
-            group.sort(key=_duration_hours, reverse=True)  # longest first (left)
-            n = len(group)
-            for col_idx, event in enumerate(group):
-                self._draw_timed_event(c, event, y, slot_height, col_idx=col_idx, num_cols=n)
+        # Sort by start time, then longer events first
+        valid_events.sort(key=lambda ev: (_event_interval(ev)[0], -_event_interval(ev)[1]))
+
+        # Assign each event a column using a greedy algorithm:
+        # place each event in the first column whose last event doesn't overlap.
+        col_assignment: list[int] = []  # column index for each event
+        col_ends: list[float] = []  # end time of the last event placed in each column
+        for ev in valid_events:
+            start, end = _event_interval(ev)
+            placed = False
+            for ci, col_end in enumerate(col_ends):
+                if col_end <= start:
+                    col_assignment.append(ci)
+                    col_ends[ci] = end
+                    placed = True
+                    break
+            if not placed:
+                col_assignment.append(len(col_ends))
+                col_ends.append(end)
+
+        # For each event, determine the number of columns that share its
+        # time span so all mutually-overlapping events use the same width.
+        for idx, ev in enumerate(valid_events):
+            ev_start, ev_end = _event_interval(ev)
+            # Find all events that overlap with this one
+            overlapping_cols: set[int] = {col_assignment[idx]}
+            for other_idx, other_ev in enumerate(valid_events):
+                o_start, o_end = _event_interval(other_ev)
+                if o_start < ev_end and o_end > ev_start:
+                    overlapping_cols.add(col_assignment[other_idx])
+            num_cols = max(overlapping_cols) - min(overlapping_cols) + 1
+            self._draw_timed_event(
+                c, ev, y, slot_height,
+                col_idx=col_assignment[idx], num_cols=num_cols,
+            )
 
 
         return y - (num_hours * slot_height)
